@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="研究ルーティン">
+<meta name="theme-color" content="#2d6a4f">
+<title>研究ルーティン</title>
+<link rel="manifest" href="manifest.json">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:   #2d6a4f;
+    --green2:  #40916c;
+    --green3:  #74c69d;
+    --green4:  #d8f3dc;
+    --amber:   #e9c46a;
+    --red:     #e76f51;
+    --bg:      #f4f6f4;
+    --card:    #ffffff;
+    --text:    #1b2a22;
+    --muted:   #6b7c73;
+    --border:  #d5e8da;
+    --radius:  14px;
+    --nav-h:   64px;
+    --safe-b:  env(safe-area-inset-bottom, 0px);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Meiryo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    padding-bottom: calc(var(--nav-h) + var(--safe-b));
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Login Screen ── */
+  #loginScreen {
+    position: fixed; inset: 0;
+    background: var(--green);
+    z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 24px;
+  }
+  .login-title { color: #fff; font-size: 26px; font-weight: 800; }
+  .login-sub { color: rgba(255,255,255,.75); font-size: 14px; text-align: center; line-height: 1.6; }
+  .login-btn {
+    background: #fff; color: var(--green);
+    border: none; padding: 14px 32px;
+    border-radius: 12px; font-size: 16px; font-weight: 700;
+    cursor: pointer; letter-spacing: .04em;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  }
+  .login-btn:active { opacity: .85; }
+
+  /* ── Header ── */
+  .header {
+    background: var(--green);
+    color: #fff;
+    padding: 16px 20px 12px;
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+    position: sticky; top: 0; z-index: 10;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+  .header .sub { font-size: 12px; opacity: .75; margin-top: 2px; }
+  .user-area { display: flex; align-items: center; gap: 8px; }
+  .user-name { font-size: 11px; opacity: .85; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logout-btn {
+    background: rgba(255,255,255,.2); color: #fff;
+    border: none; padding: 4px 10px; border-radius: 8px;
+    font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+
+  /* ── Nav ── */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: calc(var(--nav-h) + var(--safe-b));
+    padding-bottom: var(--safe-b);
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 10;
+  }
+  nav button {
+    flex: 1; border: none; background: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 600;
+    transition: color .2s;
+  }
+  nav button .icon { font-size: 22px; line-height: 1; }
+  nav button.active { color: var(--green2); }
+
+  /* ── Pages ── */
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .card-title {
+    font-size: 12px; font-weight: 700; color: var(--green2);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 12px;
+  }
+
+  /* ── Today: habit checks ── */
+  .date-badge {
+    font-size: 22px; font-weight: 800; color: var(--green);
+    margin-bottom: 4px;
+  }
+  .day-type {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px; margin-bottom: 14px;
+  }
+  .day-type.weekday { background: var(--green4); color: var(--green); }
+  .day-type.weekend { background: #fef3c7; color: #92400e; }
+
+  .habit-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .habit-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .habit-check {
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .2s; font-size: 14px;
+  }
+  .habit-item.done .habit-check {
+    background: var(--green2); border-color: var(--green2); color: #fff;
+  }
+  .habit-label { flex: 1; }
+  .habit-label .name { font-size: 15px; font-weight: 600; }
+  .habit-label .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .habit-item.done .habit-label .name { color: var(--muted); text-decoration: line-through; }
+
+  .progress-bar-wrap {
+    background: var(--border); border-radius: 8px; height: 8px; margin-top: 14px; overflow: hidden;
+  }
+  .progress-bar { height: 100%; border-radius: 8px; background: var(--green2); transition: width .4s; }
+
+  /* ── Priority card ── */
+  .priority-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .priority-item:last-child { border-bottom: none; }
+  .rank {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--green4); color: var(--green);
+    font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .rank.r1 { background: var(--green); color: #fff; }
+  .priority-name { font-weight: 600; flex: 1; }
+  .priority-deadline { font-size: 11px; color: var(--muted); }
+
+  /* ── Milestones ── */
+  .milestone-item {
+    display: flex; gap: 12px; padding: 8px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .milestone-item:last-child { border-bottom: none; }
+  .milestone-date { font-weight: 700; color: var(--green2); min-width: 60px; }
+  .milestone-label { flex: 1; }
+  .milestone-item.next .milestone-date { color: var(--red); }
+  .milestone-item.next .milestone-label { font-weight: 700; }
+
+  /* ── Kanban-like research status ── */
+  .research-grid { display: flex; flex-direction: column; gap: 10px; }
+  .research-card {
+    border-radius: 10px; padding: 12px 14px;
+    border-left: 4px solid var(--green2);
+    background: var(--green4);
+  }
+  .research-card .r-name { font-size: 14px; font-weight: 700; }
+  .research-card .r-status { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .research-card .r-deadline {
+    display: inline-block; margin-top: 6px;
+    font-size: 11px; font-weight: 700; color: var(--green);
+    background: #fff; padding: 2px 8px; border-radius: 20px;
+  }
+  .research-card.done { border-left-color: var(--muted); background: #f0f0f0; opacity: .6; }
+  .research-card.urgent { border-left-color: var(--red); background: #fff0ed; }
+  .research-card.urgent .r-deadline { color: var(--red); }
+
+  /* ── Weekly review form ── */
+  .step-header {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 800; color: var(--green);
+    margin-bottom: 10px;
+  }
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--green); color: #fff;
+    font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .form-group { margin-bottom: 12px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; display: block; }
+  .form-row { display: flex; gap: 8px; }
+  .form-input {
+    width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: inherit;
+    background: var(--bg); color: var(--text);
+    transition: border-color .2s;
+  }
+  .form-input:focus { outline: none; border-color: var(--green2); }
+  .form-input.small { width: 80px; flex-shrink: 0; text-align: center; }
+
+  textarea.form-input { resize: vertical; min-height: 70px; }
+
+  .review-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .review-table th {
+    background: var(--green4); color: var(--green);
+    padding: 7px 8px; text-align: left; font-weight: 700;
+  }
+  .review-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .review-table td input {
+    width: 100%; border: none; background: transparent; font-size: 12px;
+    font-family: inherit; color: var(--text);
+  }
+  .review-table td input:focus { outline: 1px solid var(--green3); border-radius: 4px; }
+
+  .paper-item {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .paper-item:last-child { border-bottom: none; }
+  .paper-check-btn {
+    width: 20px; height: 20px; border-radius: 4px;
+    border: 2px solid var(--border); background: none;
+    cursor: pointer; flex-shrink: 0; margin-top: 2px;
+    font-size: 12px; display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .paper-check-btn.checked { background: var(--green2); border-color: var(--green2); color: #fff; }
+  .paper-inputs { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .paper-inputs input {
+    border: none; border-bottom: 1px solid var(--border);
+    background: transparent; font-size: 13px; font-family: inherit;
+    color: var(--text); padding: 2px 0; width: 100%;
+  }
+  .paper-inputs input:focus { outline: none; border-bottom-color: var(--green2); }
+  .paper-inputs input.small { font-size: 11px; color: var(--muted); }
+
+  .add-btn {
+    width: 100%; padding: 10px; border-radius: 8px;
+    border: 2px dashed var(--border); background: none;
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; margin-top: 8px; transition: all .2s;
+  }
+  .add-btn:hover { border-color: var(--green3); color: var(--green2); }
+
+  .save-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius);
+    border: none; background: var(--green); color: #fff;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    margin-top: 8px; transition: background .2s; letter-spacing: .04em;
+  }
+  .save-btn:active { background: var(--green2); }
+
+  .saved-badge {
+    text-align: center; font-size: 13px; color: var(--green2);
+    font-weight: 600; margin-top: 8px; height: 20px;
+  }
+
+  /* ── Routine reference ── */
+  .routine-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .routine-table th {
+    background: var(--green4); color: var(--green);
+    padding: 8px 10px; text-align: left; font-weight: 700;
+  }
+  .routine-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .routine-table tr:last-child td { border-bottom: none; }
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 20px; margin-right: 4px;
+  }
+  .tag.required { background: #fee2e2; color: #b91c1c; }
+  .tag.optional { background: #fef3c7; color: #92400e; }
+
+  .rule-list { list-style: none; }
+  .rule-list li {
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px; display: flex; gap: 8px; align-items: flex-start;
+  }
+  .rule-list li:last-child { border-bottom: none; }
+  .rule-list li::before { content: '•'; color: var(--green2); font-size: 16px; line-height: 1.3; flex-shrink: 0; }
+
+  .goal-tree {
+    font-size: 13px; line-height: 2; padding: 4px 0;
+    font-family: monospace;
+  }
+  .goal-tree .level0 { font-weight: 700; color: var(--green); }
+  .goal-tree .level1 { padding-left: 16px; color: var(--green2); }
+  .goal-tree .level2 { padding-left: 32px; color: var(--text); }
+  .goal-tree .level3 { padding-left: 48px; color: var(--muted); }
+
+  /* ── Misc ── */
+  .section-gap { height: 6px; }
+  .text-muted { color: var(--muted); font-size: 12px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px;
+  }
+  .badge.green { background: var(--green4); color: var(--green); }
+  .badge.amber { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+
+<!-- ── Login Screen ── -->
+<div id="loginScreen">
+  <div class="login-title">研究ルーティン</div>
+  <div class="login-sub">Googleアカウントでログインすると<br>どのデバイスからでも使えます</div>
+  <button class="login-btn" id="loginBtn">Googleでログイン</button>
+</div>
+
+<div class="header">
+  <div class="header-row">
+    <h1 id="headerTitle">今日の日課</h1>
+    <div class="user-area">
+      <span class="user-name" id="userName"></span>
+      <button class="logout-btn" id="logoutBtn">ログアウト</button>
+    </div>
+  </div>
+  <div class="sub" id="headerSub"></div>
+</div>
+
+<!-- ═══════════════ PAGE: 今日 ═══════════════ -->
+<div class="page active" id="page-today">
+
+  <div class="card">
+    <div class="date-badge" id="todayDate"></div>
+    <div class="day-type" id="dayType"></div>
+
+    <div id="habitList"></div>
+
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="text-muted" style="margin-top:6px;text-align:right" id="progressText"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">今週の優先研究</div>
+    <div id="priorityList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">次のマイルストーン</div>
+    <div id="nextMilestone"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ PAGE: 棚卸 ═══════════════ -->
+<div class="page" id="page-review">
+
+  <!-- STEP 1 -->
+  <div class="card">
+    <div class="step-header"><div class="step-num">1</div>先週の日課を振り返る</div>
+    <div class="form-group">
+      <label class="form-label">論文執筆（目標：5時間/週）</label>
+      <div class="form-row" style="align-items:center;gap:6px">
+        <input class="form-input small" type="number" id="s1_writing" placeholder="0" min="0" max="10" step="0.5">
+        <span style="font-size:14px">時間</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">論文読み</label>
+      <div class="form-row" style="align-items:center;gap:6px;flex-wrap:wrap">
+        <input class="form-input small" type="number" id="s1_read_deep" placeholder="0" min="0">
+        <span style="font-size:13px">本精読 /</span>
+        <input class="form-input small" type="number" id="s1_read_skim" placeholder="0" min="0">
+        <span style="font-size:13px">本斜め読み</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">新聞読み（目標：7日/週）</label>
+      <div class="form-row" style="align-items:center;gap:6px">
+        <input class="form-input small" type="number" id="s1_news" placeholder="0" min="0" max="7">
+        <span style="font-size:14px">日 / 7日</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">できなかった理由（あれば）</label>
+      <textarea class="form-input" id="s1_reason" rows="2" placeholder="例：会議が多かった、体調不良 など"></textarea>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card">
+    <div class="step-header"><div class="step-num">2</div>各研究の進捗確認</div>
+    <div style="overflow-x:auto">
+      <table class="review-table">
+        <thead>
+          <tr><th>研究</th><th>先週やったこと</th><th>今週のタスク（1〜3）</th></tr>
+        </thead>
+        <tbody id="researchTable">
+          <tr><td style="font-size:11px;font-weight:700;white-space:nowrap">野球（JSSC）</td><td><input placeholder=""></td><td><input placeholder=""></td></tr>
+          <tr><td style="font-size:11px;font-weight:700;white-space:nowrap">脳震盪</td><td><input placeholder=""></td><td><input placeholder=""></td></tr>
+          <tr><td style="font-size:11px;font-weight:700;white-space:nowrap">内股</td><td><input placeholder=""></td><td><input placeholder=""></td></tr>
+          <tr><td style="font-size:11px;font-weight:700;white-space:nowrap">脳性麻痺</td><td><input placeholder=""></td><td><input placeholder=""></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="form-group" style="margin-top:12px">
+      <label class="form-label">「今週やらないと詰まる」と感じる作業は？</label>
+      <textarea class="form-input" id="s2_bottleneck" rows="2" placeholder="例：野球のIntroduction引用がないと来週の整合確認に進めない"></textarea>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card">
+    <div class="step-header"><div class="step-num">3</div>今週の優先順位を決める</div>
+    <div class="text-muted" style="margin-bottom:10px">締切の近さ・詰まりリスク・モメンタムの3基準で並べる</div>
+    <div id="priorityInputs">
+      <div class="form-group"><label class="form-label">1位（最注力）</label><input class="form-input" id="p1" placeholder="研究名と理由"><input class="form-input" id="p1r" placeholder="理由：" style="margin-top:4px"></div>
+      <div class="form-group"><label class="form-label">2位</label><input class="form-input" id="p2" placeholder="研究名"></div>
+      <div class="form-group"><label class="form-label">3位</label><input class="form-input" id="p3" placeholder="研究名"></div>
+      <div class="form-group"><label class="form-label">4位（最低限維持）</label><input class="form-input" id="p4" placeholder="研究名"></div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="card">
+    <div class="step-header"><div class="step-num">4</div>今週読む論文を選定する</div>
+    <div class="text-muted" style="margin-bottom:10px">執筆フェーズで「引用が必要な主張」に直結するものを選ぶ</div>
+    <div id="paperList"></div>
+    <button class="add-btn" onclick="addPaper()">＋ 論文を追加</button>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="card">
+    <div class="step-header"><div class="step-num">5</div>論文執筆の曜日割り当て</div>
+    <div class="form-group">
+      <label class="form-label">月〜木（1位の研究）</label>
+      <input class="form-input" id="s5_mon" placeholder="例：野球（JSSC）— Introduction引用補強">
+    </div>
+    <div class="form-group">
+      <label class="form-label">金（2位 or 小タスク）</label>
+      <input class="form-input" id="s5_fri" placeholder="例：脳震盪 — Discussion第1段落執筆">
+    </div>
+    <div class="form-group">
+      <label class="form-label">特記事項（ミーティング・実験等）</label>
+      <textarea class="form-input" id="s5_note" rows="2" placeholder="例：4/15 UHとビデオ会議"></textarea>
+    </div>
+  </div>
+
+  <button class="save-btn" onclick="saveReview()">棚卸を保存する</button>
+  <div class="saved-badge" id="savedMsg"></div>
+
+</div>
+
+<!-- ═══════════════ PAGE: 計画 ═══════════════ -->
+<div class="page" id="page-plan">
+
+  <div class="card">
+    <div class="card-title">研究ステータス</div>
+    <div class="research-grid" id="researchStatus"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">マイルストーン</div>
+    <div id="milestoneList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">大きな目標 → 週次ゴールの構造</div>
+    <div class="goal-tree">
+      <div class="level0">大きな目標（投稿）</div>
+      <div class="level1">└ フェーズ目標</div>
+      <div class="level2">└ 週次ゴール（棚卸で1〜3個）</div>
+      <div class="level3">└ 日次タスク（60分以内）</div>
+    </div>
+    <div class="text-muted" style="margin-top:10px">週次ゴールは「今週できれば来週に繋がるか」を起点に設定する。<br>できなかった場合は原因を1行メモして翌週に繰り越す。</div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ PAGE: ルーティン ═══════════════ -->
+<div class="page" id="page-routine">
+
+  <div class="card">
+    <div class="card-title">平日のルーティン</div>
+    <table class="routine-table">
+      <thead><tr><th>タイミング</th><th>内容</th><th>時間</th></tr></thead>
+      <tbody>
+        <tr><td>朝（起床後）</td><td>新聞読み<br><span class="text-muted">視野・考えを広げるため</span></td><td>15〜20分</td></tr>
+        <tr><td>日中（固定）</td><td><strong>論文執筆</strong> <span class="tag required">必須</span></td><td>60分</td></tr>
+        <tr><td>日中〜夜</td><td>論文読み <span class="tag optional">任意</span><br><span class="text-muted">棚卸で選んだ論文</span></td><td>30〜60分</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">休日のルーティン</div>
+    <table class="routine-table">
+      <thead><tr><th>タイミング</th><th>内容</th><th>時間</th></tr></thead>
+      <tbody>
+        <tr><td>朝（起床後）</td><td>新聞読み</td><td>15〜20分</td></tr>
+        <tr><td>任意</td><td>論文執筆 <span class="tag optional">任意</span></td><td>最大60分</td></tr>
+        <tr><td>任意</td><td>論文読み <span class="tag optional">任意</span></td><td>自由</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">論文執筆の曜日割り当て</div>
+    <table class="routine-table">
+      <thead><tr><th>曜日</th><th>対象</th></tr></thead>
+      <tbody>
+        <tr><td>月〜木</td><td>1位の研究（本文執筆・修正）</td></tr>
+        <tr><td>金</td><td>2位の研究 or 小タスク処理</td></tr>
+        <tr><td>土日</td><td>任意（最大1時間）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">論文読みのルール</div>
+    <ul class="rule-list">
+      <li>選定は<strong>毎週月曜の棚卸</strong>で行う。日々その場で探さない</li>
+      <li><strong>精読（30〜60分）</strong>: Methods〜Discussion通読。引用可否を判断</li>
+      <li><strong>斜め読み（5〜10分）</strong>: Abstract + Conclusionのみ</li>
+      <li>目標: 精読2〜3本 + 斜め読み5〜10本 / 週</li>
+      <li>採用確定→文献管理ソフトに登録。メモは「対象・測定・知見」3行以内</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">新聞読みの目的</div>
+    <ul class="rule-list">
+      <li><strong>視野と考えを広げるため</strong>。研究の直接利用は問わない</li>
+      <li>1紙を毎朝。全部読まなくてよい</li>
+      <li>「これは自分に関係するかも」という引っかかりを大切にする</li>
+      <li>読んだかどうかだけ記録（内容メモは任意）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">フェーズ変化への対応</div>
+    <table class="routine-table">
+      <thead><tr><th>フェーズ</th><th>方針</th></tr></thead>
+      <tbody>
+        <tr><td>現在（研究期）</td><td>論文執筆が主軸。平日1時間を固定</td></tr>
+        <tr><td>就職後（適応期）</td><td>勤務時間・疲労度に合わせて調整</td></tr>
+        <tr><td>就職後（安定期）</td><td>ルーティンを再設計。新聞・論文読みは継続</td></tr>
+      </tbody>
+    </table>
+    <div class="text-muted" style="margin-top:10px">変化が生じたら「大きな目標」から見直し、週次ゴールを再設定する。</div>
+  </div>
+
+</div>
+
+<!-- ── Bottom Nav ── -->
+<nav>
+  <button class="active" onclick="showPage('today',this,'今日の日課','今日のタスクを確認する')">
+    <span class="icon">☀️</span>今日
+  </button>
+  <button onclick="showPage('review',this,'週次棚卸','毎週月曜朝に実施（20〜30分）')">
+    <span class="icon">📋</span>棚卸
+  </button>
+  <button onclick="showPage('plan',this,'研究計画','マイルストーンと進捗')">
+    <span class="icon">📊</span>計画
+  </button>
+  <button onclick="showPage('routine',this,'ルーティン','日課の基本ルール')">
+    <span class="icon">📖</span>ルール
+  </button>
+</nav>
+
+<script>
+// ── Firebase Config ───────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBYBFE9ErazbheDoPDnnlNueA-XQlMmhqk",
+  authDomain: "routione-app.firebaseapp.com",
+  projectId: "routione-app",
+  storageBucket: "routione-app.firebasestorage.app",
+  messagingSenderId: "100236037525",
+  appId: "1:100236037525:web:8a0b13232770473c727a9c"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let currentUser = null;
+
+// ── Auth ──────────────────────────────────────
+// リダイレクト後のログイン結果を処理
+auth.getRedirectResult().catch(e => console.error('リダイレクトエラー:', e));
+
+document.getElementById('loginBtn').addEventListener('click', () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithRedirect(provider);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  auth.signOut();
+});
+
+auth.onAuthStateChanged(async user => {
+  console.log('onAuthStateChanged fired, user:', user ? user.email : 'null');
+  currentUser = user;
+  if (user) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('userName').textContent = user.displayName || user.email;
+    await initToday();
+    initPlan();
+    document.getElementById('paperList').innerHTML = '';
+    paperCount = 0;
+    addPaper(); addPaper(); addPaper();
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('userName').textContent = '';
+  }
+});
+
+// ── Data ──────────────────────────────────────
+const RESEARCH = [
+  { name:'野球（JSSC）', status:'本文完成・引用肉付け中', deadline:'2026/4/30', urgent:true },
+  { name:'脳震盪',       status:'Results確定・Discussion強化中', deadline:'2026/5月中旬', urgent:false },
+  { name:'内股 下肢キネティクス', status:'停滞中・コード修正で再開可能', deadline:'2026/6月末', urgent:false },
+  { name:'脳性麻痺 大外刈', status:'Mac3D完了・Matlab解析中', deadline:'2026/6月', urgent:false },
+  { name:'Gait and Posture', status:'完了', deadline:'—', done:true },
+];
+
+const MILESTONES = [
+  { date:'3/20', label:'脳性麻痺 Mac3D マーカ貼付完了', done:true },
+  { date:'3/末',  label:'脳性麻痺 Matlab初期解析・UH共有準備' },
+  { date:'4/中旬',label:'UH とのビデオミーティング' },
+  { date:'4/30', label:'野球（JSSC）投稿', next:true },
+  { date:'5/中旬',label:'脳震盪 投稿' },
+  { date:'6/中旬',label:'内股 投稿（目標）' },
+  { date:'6/末',  label:'脳性麻痺 完成（目標）' },
+];
+
+const WEEKDAY_HABITS = [
+  { id:'news',  name:'新聞読み', desc:'15〜20分・視野を広げるため' },
+  { id:'write', name:'論文執筆', desc:'60分・必須（最優先研究に使う）' },
+  { id:'read',  name:'論文読み', desc:'30〜60分・棚卸で選んだ論文' },
+];
+const WEEKEND_HABITS = [
+  { id:'news',  name:'新聞読み', desc:'15〜20分' },
+  { id:'write', name:'論文執筆', desc:'最大60分・任意' },
+  { id:'read',  name:'論文読み', desc:'自由・負担にならない範囲で' },
+];
+
+// ── Helpers ──────────────────────────────────
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+function isWeekend() { const d = new Date().getDay(); return d===0||d===6; }
+function dateLabel() {
+  const d = new Date();
+  const days = ['日','月','火','水','木','金','土'];
+  return `${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+
+// ── Firestore helpers ─────────────────────────
+async function fsGet(collection, docId) {
+  try {
+    const snap = await db.collection('users').doc(currentUser.uid)
+      .collection(collection).doc(docId).get();
+    return snap.exists ? snap.data() : null;
+  } catch (e) { return null; }
+}
+
+async function fsSet(collection, docId, data) {
+  await db.collection('users').doc(currentUser.uid)
+    .collection(collection).doc(docId).set(data);
+}
+
+// ── Nav ──────────────────────────────────────
+function showPage(id, btn, title, sub) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('headerTitle').textContent = title;
+  document.getElementById('headerSub').textContent = sub;
+}
+
+// ── Today Page ───────────────────────────────
+async function initToday() {
+  document.getElementById('todayDate').textContent = dateLabel();
+  const weekend = isWeekend();
+  const dayEl = document.getElementById('dayType');
+  dayEl.textContent = weekend ? '休日' : '平日';
+  dayEl.className = 'day-type ' + (weekend ? 'weekend' : 'weekday');
+
+  const key = todayKey();
+  const saved = await fsGet('habits', key) || {};
+  const habits = weekend ? WEEKEND_HABITS : WEEKDAY_HABITS;
+
+  const list = document.getElementById('habitList');
+  list.innerHTML = '';
+  habits.forEach(h => {
+    const done = !!saved[h.id];
+    const el = document.createElement('div');
+    el.className = 'habit-item' + (done?' done':'');
+    el.innerHTML = `
+      <div class="habit-check">${done?'✓':''}</div>
+      <div class="habit-label">
+        <div class="name">${h.name}</div>
+        <div class="desc">${h.desc}</div>
+      </div>`;
+    el.addEventListener('click', () => toggleHabit(h.id, key, habits));
+    list.appendChild(el);
+  });
+
+  updateProgress(saved, habits);
+
+  // Priority
+  const saved2 = await fsGet('meta', 'review_latest') || {};
+  const pEl = document.getElementById('priorityList');
+  pEl.innerHTML = '';
+  const ranks = [saved2.p1||'野球（JSSC）', saved2.p2||'脳震盪', saved2.p3||'内股', saved2.p4||'脳性麻痺'];
+  const deadlines = {'野球（JSSC）':'4/30','脳震盪':'5/中旬','内股':'6/中旬','脳性麻痺':'6/末'};
+  ranks.forEach((r,i) => {
+    const d = document.createElement('div');
+    d.className = 'priority-item';
+    d.innerHTML = `<div class="rank${i===0?' r1':''}">${i+1}</div>
+      <div class="priority-name">${r}</div>
+      <div class="priority-deadline">${deadlines[r]||''}</div>`;
+    pEl.appendChild(d);
+  });
+
+  // Next milestone
+  const nm = MILESTONES.find(m=>m.next) || MILESTONES.find(m=>!m.done);
+  document.getElementById('nextMilestone').innerHTML = nm
+    ? `<div class="milestone-item next"><div class="milestone-date">${nm.date}</div><div class="milestone-label">${nm.label}</div></div>`
+    : '<div class="text-muted">すべて完了</div>';
+}
+
+async function toggleHabit(id, key, habits) {
+  const saved = await fsGet('habits', key) || {};
+  saved[id] = !saved[id];
+  await fsSet('habits', key, saved);
+  await initToday();
+}
+
+function updateProgress(saved, habits) {
+  const done = habits.filter(h=>saved[h.id]).length;
+  const pct = Math.round(done/habits.length*100);
+  document.getElementById('progressBar').style.width = pct+'%';
+  document.getElementById('progressText').textContent = `${done} / ${habits.length} 完了`;
+}
+
+// ── Plan Page ────────────────────────────────
+function initPlan() {
+  const rEl = document.getElementById('researchStatus');
+  rEl.innerHTML = '';
+  RESEARCH.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'research-card' + (r.done?' done':r.urgent?' urgent':'');
+    el.innerHTML = `<div class="r-name">${r.name}</div>
+      <div class="r-status">${r.status}</div>
+      ${r.deadline!=='—' ? `<div class="r-deadline">目標: ${r.deadline}</div>` : ''}`;
+    rEl.appendChild(el);
+  });
+
+  const mEl = document.getElementById('milestoneList');
+  mEl.innerHTML = '';
+  MILESTONES.forEach(m => {
+    const el = document.createElement('div');
+    el.className = 'milestone-item' + (m.next?' next':'') + (m.done?' done':'');
+    el.innerHTML = `<div class="milestone-date">${m.date}</div>
+      <div class="milestone-label">${m.label}${m.done?' ✓':''}</div>`;
+    mEl.appendChild(el);
+  });
+}
+
+// ── Review Page ──────────────────────────────
+let paperCount = 0;
+function addPaper() {
+  paperCount++;
+  const id = 'paper_' + paperCount;
+  const div = document.createElement('div');
+  div.className = 'paper-item';
+  div.id = id;
+  div.innerHTML = `
+    <button class="paper-check-btn" onclick="togglePaper(this)"></button>
+    <div class="paper-inputs">
+      <input placeholder="著者・年・タイトル（略称）">
+      <input class="small" placeholder="→ 研究名向け ｜ 精読 or 斜め読み">
+    </div>`;
+  document.getElementById('paperList').appendChild(div);
+}
+function togglePaper(btn) {
+  btn.classList.toggle('checked');
+  btn.textContent = btn.classList.contains('checked') ? '✓' : '';
+}
+
+async function saveReview() {
+  const data = {
+    s1_writing: document.getElementById('s1_writing').value,
+    s1_read_deep: document.getElementById('s1_read_deep').value,
+    s1_read_skim: document.getElementById('s1_read_skim').value,
+    s1_news: document.getElementById('s1_news').value,
+    s1_reason: document.getElementById('s1_reason').value,
+    s2_bottleneck: document.getElementById('s2_bottleneck').value,
+    p1: document.getElementById('p1').value,
+    p1r: document.getElementById('p1r').value,
+    p2: document.getElementById('p2').value,
+    p3: document.getElementById('p3').value,
+    p4: document.getElementById('p4').value,
+    s5_mon: document.getElementById('s5_mon').value,
+    s5_fri: document.getElementById('s5_fri').value,
+    s5_note: document.getElementById('s5_note').value,
+    savedAt: new Date().toLocaleString('ja-JP'),
+  };
+  const key = todayKey();
+  await fsSet('reviews', key, data);
+  await fsSet('meta', 'review_latest', data);
+
+  const msg = document.getElementById('savedMsg');
+  msg.textContent = `✓ ${data.savedAt} に保存しました`;
+  setTimeout(() => msg.textContent = '', 3000);
+
+  await initToday();
+}
+
+// ── Init ─────────────────────────────────────
+document.getElementById('headerSub').textContent = '今日のタスクを確認する';
+
+// PWA
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
