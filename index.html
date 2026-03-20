@@ -609,12 +609,12 @@ const db = firebase.firestore();
 let currentUser = null;
 
 // ── Auth ──────────────────────────────────────
-// リダイレクト後のログイン結果を処理
-auth.getRedirectResult().catch(e => console.error('リダイレクトエラー:', e));
-
 document.getElementById('loginBtn').addEventListener('click', () => {
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider);
+  auth.signInWithPopup(provider).catch(e => {
+    console.error('ログインエラー:', e);
+    alert('ログインに失敗しました。ポップアップを許可してください。\nエラー: ' + e.message);
+  });
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
