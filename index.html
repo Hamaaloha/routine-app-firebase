@@ -627,6 +627,7 @@ auth.onAuthStateChanged(async user => {
   if (user) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('userName').textContent = user.displayName || user.email;
+    await loadOrInitUserData();
     await initToday();
     initPlan();
     document.getElementById('paperList').innerHTML = '';
@@ -638,8 +639,8 @@ auth.onAuthStateChanged(async user => {
   }
 });
 
-// ── Data ──────────────────────────────────────
-const RESEARCH = [
+// ── Data（デフォルト値・初回ログイン時にFirestoreへ保存） ──────
+let RESEARCH = [
   { name:'野球（JSSC）', status:'本文完成・引用肉付け中', deadline:'2026/4/30', urgent:true },
   { name:'脳震盪',       status:'Results確定・Discussion強化中', deadline:'2026/5月中旬', urgent:false },
   { name:'内股 下肢キネティクス', status:'停滞中・コード修正で再開可能', deadline:'2026/6月末', urgent:false },
@@ -647,7 +648,7 @@ const RESEARCH = [
   { name:'Gait and Posture', status:'完了', deadline:'—', done:true },
 ];
 
-const MILESTONES = [
+let MILESTONES = [
   { date:'3/20', label:'脳性麻痺 Mac3D マーカ貼付完了', done:true },
   { date:'3/末',  label:'脳性麻痺 Matlab初期解析・UH共有準備' },
   { date:'4/中旬',label:'UH とのビデオミーティング' },
@@ -656,6 +657,17 @@ const MILESTONES = [
   { date:'6/中旬',label:'内股 投稿（目標）' },
   { date:'6/末',  label:'脳性麻痺 完成（目標）' },
 ];
+
+async function loadOrInitUserData() {
+  const snap = await fsGet('meta', 'research_data');
+  if (snap && snap.research && snap.milestones) {
+    RESEARCH = snap.research;
+    MILESTONES = snap.milestones;
+  } else {
+    // 初回ログイン：デフォルト値をFirestoreに保存
+    await fsSet('meta', 'research_data', { research: RESEARCH, milestones: MILESTONES });
+  }
+}
 
 const WEEKDAY_HABITS = [
   { id:'news',  name:'新聞読み', desc:'15〜20分・視野を広げるため' },
