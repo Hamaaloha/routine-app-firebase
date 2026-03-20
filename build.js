@@ -1,0 +1,10 @@
+const fs = require('fs');
+let html = fs.readFileSync('index.html', 'utf8');
+html = html.replace(/%%FIREBASE_API_KEY%%/g, process.env.FIREBASE_API_KEY);
+html = html.replace(/%%FIREBASE_AUTH_DOMAIN%%/g, process.env.FIREBASE_AUTH_DOMAIN);
+html = html.replace(/%%FIREBASE_PROJECT_ID%%/g, process.env.FIREBASE_PROJECT_ID);
+html = html.replace(/%%FIREBASE_STORAGE_BUCKET%%/g, process.env.FIREBASE_STORAGE_BUCKET);
+html = html.replace(/%%FIREBASE_MESSAGING_SENDER_ID%%/g, process.env.FIREBASE_MESSAGING_SENDER_ID);
+html = html.replace(/%%FIREBASE_APP_ID%%/g, process.env.FIREBASE_APP_ID);
+fs.writeFileSync('index.html', html);
+console.log('Firebase config injected.');
